@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1091538466581",
+    "project_id": "crud-4e269",
+    "storage_bucket": "crud-4e269.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1091538466581:android:22d10b7f18617cfb34db1c",
+        "android_client_info": {
+          "package_name": "com.example.b25_oposiciones"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAMPe9-05dAkNheOqmL1UMKCdiEjGBgPHA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

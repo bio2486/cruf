@@ -1,4 +1,4 @@
-name: b25_oposiciones
+name: crud
 description: "A new Flutter project."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
@@ -34,6 +34,12 @@ dependencies:
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
+  flutter_spinkit: ^5.2.0
+  intl: ^0.18.1
+  # Firebase Core
+  firebase_core: ^3.13.1       # versión publicada recientemente :contentReference[oaicite:0]{index=0}
+  firebase_auth: ^5.5.4        # última versión estable :contentReference[oaicite:1]{index=1}
+  cloud_firestore: ^5.6.8      # versión Dart 3 compatible :contentReference[oaicite:2]{index=2}
 
 dev_dependencies:
   flutter_test:
