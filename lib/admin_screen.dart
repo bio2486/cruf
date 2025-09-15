@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
@@ -11,9 +12,84 @@ class AdminScreen extends StatefulWidget {
 
 class _AdminScreenState extends State<AdminScreen> {
   final FirebaseFirestore db = FirebaseFirestore.instance;
-  String _searchQuery = "";
   final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = "";
+  Timer? _debounce;
 
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _debounce?.cancel();
+    super.dispose();
+  }
+
+  void _onSearchChanged(String value) {
+    if (_debounce?.isActive ?? false) _debounce!.cancel();
+    _debounce = Timer(const Duration(milliseconds: 300), () {
+      setState(() {
+        _searchQuery = value.toLowerCase();
+      });
+    });
+  }
+
+  // -------------------- Búsqueda --------------------
+  Future<Map<String, dynamic>> _getUserFullData(QueryDocumentSnapshot user) async {
+    final data = user.data() as Map<String, dynamic>;
+    final Map<String, dynamic> fullData = Map.from(data);
+    fullData['id'] = user.id;
+
+    // Subcolección servicios
+    final serviciosSnap = await db
+        .collection('usuarios')
+        .doc(user.id)
+        .collection('servicios')
+        .get();
+    fullData['servicios'] = serviciosSnap.docs.map((d) => d.data()).toList();
+
+    // Subcolección notas
+    final notasSnap = await db
+        .collection('usuarios')
+        .doc(user.id)
+        .collection('notas')
+        .get();
+    fullData['notas'] = notasSnap.docs.map((d) => d.data()).toList();
+
+    return fullData;
+  }
+
+  bool _matchesSearch(Map<String, dynamic> data) {
+    String fullText = "";
+
+    // infoPersonal
+    if (data['infoPersonal'] != null && data['infoPersonal'] is Map) {
+      (data['infoPersonal'] as Map).forEach((k, v) {
+        fullText += "$k $v ";
+      });
+    }
+
+    // campos principales
+    data.forEach((k, v) {
+      if (v is String || v is num) fullText += "$v ";
+    });
+
+    // servicios
+    if (data['servicios'] != null && data['servicios'] is List) {
+      for (var s in data['servicios']) {
+        if (s is Map) s.forEach((k, v) => fullText += "$k $v ");
+      }
+    }
+
+    // notas
+    if (data['notas'] != null && data['notas'] is List) {
+      for (var n in data['notas']) {
+        if (n is Map) n.forEach((k, v) => fullText += "$k $v ");
+      }
+    }
+
+    return fullText.toLowerCase().contains(_searchQuery);
+  }
+
+  // -------------------- UI --------------------
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -22,18 +98,11 @@ class _AdminScreenState extends State<AdminScreen> {
         title: StreamBuilder<QuerySnapshot>(
           stream: db.collection('usuarios').snapshots(),
           builder: (context, snapshot) {
-            if (!snapshot.hasData) {
-              return const Text("Administración de Usuarios");
-            }
-            final totalUsuarios = snapshot.data!.docs.length;
-            return Text("Administración de clientes ($totalUsuarios)");
+            final total = snapshot.hasData ? snapshot.data!.docs.length : 0;
+            return Text("Administración de Usuarios ($total)");
           },
         ),
         backgroundColor: Colors.blueAccent,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
-        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.person_add),
@@ -54,10 +123,8 @@ class _AdminScreenState extends State<AdminScreen> {
                     ? IconButton(
                         icon: const Icon(Icons.clear),
                         onPressed: () {
-                          setState(() {
-                            _searchQuery = "";
-                            _searchController.clear();
-                          });
+                          _searchController.clear();
+                          _onSearchChanged("");
                         },
                       )
                     : null,
@@ -68,8 +135,7 @@ class _AdminScreenState extends State<AdminScreen> {
                 filled: true,
                 fillColor: Colors.white,
               ),
-              onChanged: (value) =>
-                  setState(() => _searchQuery = value.toLowerCase()),
+              onChanged: _onSearchChanged,
             ),
           ),
         ),
@@ -79,88 +145,96 @@ class _AdminScreenState extends State<AdminScreen> {
         builder: (context, snapshot) {
           if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
 
-          final users = snapshot.data!.docs.where((user) {
-            final data = user.data() as Map<String, dynamic>;
-            String fullText = "";
-            data.forEach((key, value) {
-              if (value is Map) value.forEach((k, v) => fullText += "$k $v ");
-              else fullText += "$value ";
-            });
-            return fullText.toLowerCase().contains(_searchQuery);
-          }).toList();
+          final allUsers = snapshot.data!.docs;
 
-          if (users.isEmpty) return const Center(child: Text("No se encontraron usuarios."));
+          return FutureBuilder<List<Map<String, dynamic>>>(
+            future: Future.wait(allUsers.map(_getUserFullData)),
+            builder: (context, snapshotFull) {
+              if (!snapshotFull.hasData) return const Center(child: CircularProgressIndicator());
 
-          return ListView.builder(
-            itemCount: users.length,
-            itemBuilder: (context, index) {
-              final user = users[index];
-              final data = user.data() as Map<String, dynamic>;
-              final info = data.containsKey('infoPersonal')
-                  ? Map<String, dynamic>.from(data['infoPersonal'])
-                  : <String, dynamic>{};
+              final usersData = snapshotFull.data!;
+              final filteredUsers = usersData.where(_matchesSearch).toList();
 
-              return Card(
-                margin: const EdgeInsets.all(12),
-                elevation: 4,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                color: Colors.white,
-                child: ExpansionTile(
-                  tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  title: Text("${index + 1}. ${data['nombre'] ?? "Sin nombre"}",
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  subtitle: Text("Rol: ${data['rol'] ?? "N/A"}"),
-                  children: [
-                    _sectionCard("Información Personal", [
-                      ...info.entries.map((entry) {
-                        String displayValue = entry.value.toString();
-                        if (entry.value is Timestamp) displayValue = DateFormat('dd/MM/yyyy').format(entry.value.toDate());
-                        return ListTile(
-                          leading: const Icon(Icons.info),
-                          title: Text("${entry.key}: $displayValue"),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                  icon: const Icon(Icons.edit, color: Colors.orange),
-                                  onPressed: () => _showEditInfoDialog(user.id, entry.key, entry.value)),
-                              IconButton(
-                                  icon: const Icon(Icons.delete, color: Colors.red),
-                                  onPressed: () => _confirmDeletion(
-                                      context, "Eliminar campo ${entry.key}?", () {
-                                    db.collection('usuarios').doc(user.id).update({
-                                      'infoPersonal.${entry.key}': FieldValue.delete()
-                                    });
-                                  })),
-                            ],
-                          ),
-                        );
-                      }),
-                      TextButton.icon(
-                        icon: const Icon(Icons.add),
-                        label: const Text("Agregar Información"),
-                        onPressed: () => _showAddInfoDialog(user.id),
+              if (filteredUsers.isEmpty) {
+                return const Center(child: Text("No se encontraron usuarios."));
+              }
+
+              return ListView.builder(
+                itemCount: filteredUsers.length,
+                itemBuilder: (context, index) {
+                  final data = filteredUsers[index];
+                  final info = data['infoPersonal'] != null
+                      ? Map<String, dynamic>.from(data['infoPersonal'])
+                      : <String, dynamic>{};
+                  final userId = data['id'];
+
+                  return Card(
+                    margin: const EdgeInsets.all(12),
+                    elevation: 4,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    color: Colors.white,
+                    child: ExpansionTile(
+                      tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      title: Text(
+                        "${index + 1}. ${data['nombre'] ?? "Sin nombre"}",
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                       ),
-                    ], Colors.blue[100]!),
-                    _buildServiciosSection(user.id),
-                    _buildNotasSection(user.id),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
+                      subtitle: Text("Rol: ${data['rol'] ?? "N/A"}"),
                       children: [
-                        IconButton(
-                            icon: const Icon(Icons.edit, color: Colors.blue),
-                            tooltip: "Editar Usuario",
-                            onPressed: () => _showEditUserDialog(user)),
-                        IconButton(
-                            icon: const Icon(Icons.delete, color: Colors.red),
-                            tooltip: "Eliminar Usuario",
-                            onPressed: () => _confirmDeletion(context, "Eliminar este usuario?", () {
-                                  db.collection('usuarios').doc(user.id).delete();
+                        _sectionCard("Información Personal", [
+                          ...info.entries.map((entry) {
+                            String displayValue = entry.value.toString();
+                            if (entry.value is Timestamp) {
+                              displayValue = DateFormat('dd/MM/yyyy').format(entry.value.toDate());
+                            }
+                            return ListTile(
+                              leading: const Icon(Icons.info),
+                              title: Text("${entry.key}: $displayValue"),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                      icon: const Icon(Icons.edit, color: Colors.orange),
+                                      onPressed: () => _showEditInfoDialog(userId, entry.key, entry.value)),
+                                  IconButton(
+                                      icon: const Icon(Icons.delete, color: Colors.red),
+                                      onPressed: () => _confirmDeletion(
+                                          context, "Eliminar campo ${entry.key}?", () {
+                                        db.collection('usuarios').doc(userId).update({
+                                          'infoPersonal.${entry.key}': FieldValue.delete()
+                                        });
+                                      })),
+                                ],
+                              ),
+                            );
+                          }),
+                          TextButton.icon(
+                            icon: const Icon(Icons.add),
+                            label: const Text("Agregar Información"),
+                            onPressed: () => _showAddInfoDialog(userId),
+                          ),
+                        ], Colors.blue[100]!),
+                        _buildServiciosSection(userId),
+                        _buildNotasSection(userId),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            IconButton(
+                                icon: const Icon(Icons.edit, color: Colors.blue),
+                                tooltip: "Editar Usuario",
+                                onPressed: () => _showEditUserDialog(userId, data)),
+                            IconButton(
+                                icon: const Icon(Icons.delete, color: Colors.red),
+                                tooltip: "Eliminar Usuario",
+                                onPressed: () => _confirmDeletion(context, "Eliminar este usuario?", () {
+                                  db.collection('usuarios').doc(userId).delete();
                                 })),
+                          ],
+                        ),
                       ],
                     ),
-                  ],
-                ),
+                  );
+                },
               );
             },
           );
@@ -169,7 +243,7 @@ class _AdminScreenState extends State<AdminScreen> {
     );
   }
 
-  // ---------------- Helpers ----------------
+  // -------------------- Helpers --------------------
   Widget _sectionCard(String title, List<Widget> children, Color color) {
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
@@ -192,19 +266,18 @@ class _AdminScreenState extends State<AdminScreen> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar")),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () {
-              onConfirm();
-              Navigator.pop(context);
-            },
-            child: const Text("Eliminar"),
-          ),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () {
+                onConfirm();
+                Navigator.pop(context);
+              },
+              child: const Text("Eliminar")),
         ],
       ),
     );
   }
 
-  // ---------------- CRUD Usuarios ----------------
+  // -------------------- CRUD Usuarios --------------------
   void _showAddUserDialog() {
     final nombreController = TextEditingController();
     final rolController = TextEditingController();
@@ -223,7 +296,11 @@ class _AdminScreenState extends State<AdminScreen> {
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar")),
           ElevatedButton(
               onPressed: () {
-                db.collection('usuarios').add({'nombre': nombreController.text, 'rol': rolController.text, 'infoPersonal': {}});
+                db.collection('usuarios').add({
+                  'nombre': nombreController.text,
+                  'rol': rolController.text,
+                  'infoPersonal': {}
+                });
                 Navigator.pop(context);
               },
               child: const Text("Agregar")),
@@ -232,8 +309,7 @@ class _AdminScreenState extends State<AdminScreen> {
     );
   }
 
-  void _showEditUserDialog(QueryDocumentSnapshot user) {
-    final data = user.data() as Map<String, dynamic>;
+  void _showEditUserDialog(String userId, Map<String, dynamic> data) {
     final nombreController = TextEditingController(text: data['nombre']);
     final rolController = TextEditingController(text: data['rol']);
     showDialog(
@@ -251,7 +327,10 @@ class _AdminScreenState extends State<AdminScreen> {
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar")),
           ElevatedButton(
               onPressed: () {
-                db.collection('usuarios').doc(user.id).update({'nombre': nombreController.text, 'rol': rolController.text});
+                db.collection('usuarios').doc(userId).update({
+                  'nombre': nombreController.text,
+                  'rol': rolController.text
+                });
                 Navigator.pop(context);
               },
               child: const Text("Guardar")),
@@ -260,7 +339,7 @@ class _AdminScreenState extends State<AdminScreen> {
     );
   }
 
-  // ---------------- CRUD InfoPersonal ----------------
+  // -------------------- CRUD InfoPersonal --------------------
   void _showAddInfoDialog(String userId) {
     final keyController = TextEditingController();
     final valueController = TextEditingController();
@@ -279,7 +358,9 @@ class _AdminScreenState extends State<AdminScreen> {
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar")),
           ElevatedButton(
               onPressed: () {
-                db.collection('usuarios').doc(userId).update({'infoPersonal.${keyController.text}': valueController.text});
+                db.collection('usuarios').doc(userId).update({
+                  'infoPersonal.${keyController.text}': valueController.text
+                });
                 Navigator.pop(context);
               },
               child: const Text("Agregar")),
@@ -299,7 +380,9 @@ class _AdminScreenState extends State<AdminScreen> {
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar")),
           ElevatedButton(
               onPressed: () {
-                db.collection('usuarios').doc(userId).update({'infoPersonal.$key': valueController.text});
+                db.collection('usuarios').doc(userId).update({
+                  'infoPersonal.$key': valueController.text
+                });
                 Navigator.pop(context);
               },
               child: const Text("Guardar")),
@@ -308,7 +391,7 @@ class _AdminScreenState extends State<AdminScreen> {
     );
   }
 
-  // ---------------- Subcolecciones Servicios ----------------
+  // -------------------- CRUD Servicios --------------------
   Widget _buildServiciosSection(String userId) {
     return _sectionCard("Servicios", [
       StreamBuilder<QuerySnapshot>(
@@ -316,22 +399,23 @@ class _AdminScreenState extends State<AdminScreen> {
         builder: (context, snapshot) {
           if (!snapshot.hasData) return const SizedBox();
           final servicios = snapshot.data!.docs;
-
           return Column(
             children: [
               ...servicios.map((doc) {
-                final data = doc.data() as Map<String, dynamic>;
-                final fecha = data['fecha'] != null ? DateFormat('dd/MM/yyyy').format((data['fecha'] as Timestamp).toDate()) : "";
+                final sData = doc.data() as Map<String, dynamic>;
+                final fecha = sData['fecha'] != null
+                    ? DateFormat('dd/MM/yyyy').format((sData['fecha'] as Timestamp).toDate())
+                    : "";
                 return ListTile(
                   leading: const Icon(Icons.work),
-                  title: Text(data['nombre'] ?? "Sin nombre"),
-                  subtitle: Text("${data['descripcion'] ?? ""} $fecha"),
+                  title: Text(sData['nombre'] ?? "Sin nombre"),
+                  subtitle: Text("${sData['descripcion'] ?? ""} $fecha"),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       IconButton(
                           icon: const Icon(Icons.edit, color: Colors.orange),
-                          onPressed: () => _showEditServiceDialog(userId, doc.id, data)),
+                          onPressed: () => _showEditServiceDialog(userId, doc.id, sData)),
                       IconButton(
                           icon: const Icon(Icons.delete, color: Colors.red),
                           onPressed: () => _confirmDeletion(context, "Eliminar este servicio?", () {
@@ -348,7 +432,7 @@ class _AdminScreenState extends State<AdminScreen> {
             ],
           );
         },
-      ),
+      )
     ], Colors.green[100]!);
   }
 
@@ -413,7 +497,7 @@ class _AdminScreenState extends State<AdminScreen> {
     );
   }
 
-  // ---------------- Subcolecciones Notas ----------------
+  // -------------------- CRUD Notas --------------------
   Widget _buildNotasSection(String userId) {
     return _sectionCard("Notas", [
       StreamBuilder<QuerySnapshot>(
@@ -421,22 +505,23 @@ class _AdminScreenState extends State<AdminScreen> {
         builder: (context, snapshot) {
           if (!snapshot.hasData) return const SizedBox();
           final notas = snapshot.data!.docs;
-
           return Column(
             children: [
               ...notas.map((doc) {
-                final data = doc.data() as Map<String, dynamic>;
-                final fecha = data['fecha'] != null ? DateFormat('dd/MM/yyyy – kk:mm').format((data['fecha'] as Timestamp).toDate()) : "";
+                final nData = doc.data() as Map<String, dynamic>;
+                final fecha = nData['fecha'] != null
+                    ? DateFormat('dd/MM/yyyy – kk:mm').format((nData['fecha'] as Timestamp).toDate())
+                    : "";
                 return ListTile(
                   leading: const Icon(Icons.note),
-                  title: Text(data['nota'] ?? ""),
+                  title: Text(nData['nota'] ?? ""),
                   subtitle: Text(fecha),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       IconButton(
                           icon: const Icon(Icons.edit, color: Colors.orange),
-                          onPressed: () => _showEditNoteDialog(userId, doc.id, data)),
+                          onPressed: () => _showEditNoteDialog(userId, doc.id, nData)),
                       IconButton(
                           icon: const Icon(Icons.delete, color: Colors.red),
                           onPressed: () => _confirmDeletion(context, "Eliminar esta nota?", () {
@@ -453,7 +538,7 @@ class _AdminScreenState extends State<AdminScreen> {
             ],
           );
         },
-      ),
+      )
     ], Colors.yellow[100]!);
   }
 
