@@ -19,7 +19,13 @@ class _TrabajadoresScreenState extends State<TrabajadoresScreen> {
     return Scaffold(
       backgroundColor: Colors.green[50],
       appBar: AppBar(
-        title: const Text("Administración de Trabajadores"),
+        title: StreamBuilder<QuerySnapshot>(
+          stream: db.collection('trabajadores').snapshots(),
+          builder: (context, snapshot) {
+            final total = snapshot.hasData ? snapshot.data!.docs.length : 0;
+            return Text("Administración de Trabajadores ($total)");
+          },
+        ),
         backgroundColor: Colors.green,
         automaticallyImplyLeading: true,
         actions: [
@@ -637,7 +643,6 @@ class _TrabajadoresScreenState extends State<TrabajadoresScreen> {
               child: const Text("Cancelar")),
           ElevatedButton(
             onPressed: () {
-             
               db.collection('trabajadores')
                   .doc(workerId)
                   .collection('notas')

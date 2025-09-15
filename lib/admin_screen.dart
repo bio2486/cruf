@@ -19,7 +19,16 @@ class _AdminScreenState extends State<AdminScreen> {
     return Scaffold(
       backgroundColor: Colors.blue[50],
       appBar: AppBar(
-        title: const Text("Administración de Usuarios"),
+        title: StreamBuilder<QuerySnapshot>(
+          stream: db.collection('usuarios').snapshots(),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) {
+              return const Text("Administración de Usuarios");
+            }
+            final totalUsuarios = snapshot.data!.docs.length;
+            return Text("Administración de clientes ($totalUsuarios)");
+          },
+        ),
         backgroundColor: Colors.blueAccent,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
