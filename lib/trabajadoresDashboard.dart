@@ -10,14 +10,14 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'dart:html' as html; // Solo Web
 
-class UsuariosDetalleScreen extends StatefulWidget {
-  const UsuariosDetalleScreen({super.key});
+class TrabajadoresDashboard extends StatefulWidget {
+  const TrabajadoresDashboard({super.key});
 
   @override
-  State<UsuariosDetalleScreen> createState() => _UsuariosDetalleScreenState();
+  State<TrabajadoresDashboard> createState() => _TrabajadoresDashboardState();
 }
 
-class _UsuariosDetalleScreenState extends State<UsuariosDetalleScreen> {
+class _TrabajadoresDashboardState extends State<TrabajadoresDashboard> {
   final FirebaseFirestore db = FirebaseFirestore.instance;
   String _searchQuery = "";
 
@@ -25,8 +25,8 @@ class _UsuariosDetalleScreenState extends State<UsuariosDetalleScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Detalle de Clientes"),
-        backgroundColor: Colors.blueAccent,
+        title: const Text("Detalle de Trabajadores"),
+        backgroundColor: const Color.fromARGB(255, 16, 207, 51),
         actions: [
           PopupMenuButton<String>(
             onSelected: (value) {
@@ -59,23 +59,21 @@ class _UsuariosDetalleScreenState extends State<UsuariosDetalleScreen> {
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
-              onChanged: (value) {
-                setState(() => _searchQuery = value.toLowerCase().trim());
-              },
+              onChanged: (value) => setState(() => _searchQuery = value.toLowerCase().trim()),
             ),
           ),
 
           // Tabla con scroll
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
-              stream: db.collection('usuarios').snapshots(),
+              stream: db.collection('trabajadores').snapshots(),
               builder: (context, snapshot) {
                 if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-                final users = snapshot.data!.docs;
-                if (users.isEmpty) return const Center(child: Text("No hay usuarios."));
+                final trabajadores = snapshot.data!.docs;
+                if (trabajadores.isEmpty) return const Center(child: Text("No hay trabajadores."));
 
-                final filteredUsers = users.where((user) {
-                  final data = user.data() as Map<String, dynamic>;
+                final filteredTrabajadores = trabajadores.where((trabajador) {
+                  final data = trabajador.data() as Map<String, dynamic>;
                   final nombre = (data['nombre'] ?? "").toString().toLowerCase();
                   final rol = (data['rol'] ?? "").toString().toLowerCase();
                   final infoPersonal = (data['infoPersonal'] ?? {}).toString().toLowerCase();
@@ -101,8 +99,8 @@ class _UsuariosDetalleScreenState extends State<UsuariosDetalleScreen> {
                           DataColumn(label: Text("Servicios", style: TextStyle(fontWeight: FontWeight.bold))),
                           DataColumn(label: Text("Notas", style: TextStyle(fontWeight: FontWeight.bold))),
                         ],
-                        rows: filteredUsers.map((user) {
-                          final data = user.data() as Map<String, dynamic>;
+                        rows: filteredTrabajadores.map((trabajador) {
+                          final data = trabajador.data() as Map<String, dynamic>;
                           final info = (data['infoPersonal'] ?? {}) as Map<String, dynamic>;
                           String infoPersonalText = info.isNotEmpty
                               ? info.entries.map((e) => e.value is Timestamp
@@ -116,8 +114,8 @@ class _UsuariosDetalleScreenState extends State<UsuariosDetalleScreen> {
                             DataCell(Text(infoPersonalText)),
                             DataCell(FutureBuilder<QuerySnapshot>(
                               future: db
-                                  .collection('usuarios')
-                                  .doc(user.id)
+                                  .collection('trabajadores')
+                                  .doc(trabajador.id)
                                   .collection('servicios')
                                   .orderBy('fecha')
                                   .get(),
@@ -138,8 +136,8 @@ class _UsuariosDetalleScreenState extends State<UsuariosDetalleScreen> {
                             )),
                             DataCell(FutureBuilder<QuerySnapshot>(
                               future: db
-                                  .collection('usuarios')
-                                  .doc(user.id)
+                                  .collection('trabajadores')
+                                  .doc(trabajador.id)
                                   .collection('notas')
                                   .orderBy('fecha', descending: true)
                                   .get(),
@@ -165,21 +163,21 @@ class _UsuariosDetalleScreenState extends State<UsuariosDetalleScreen> {
 
   // 🔹 Exportar PDF con Servicios y Notas
   Future<void> _exportPdf() async {
-    final snapshot = await db.collection('usuarios').get();
+    final snapshot = await db.collection('trabajadores').get();
     final pdf = pw.Document();
 
-    final data = await Future.wait(snapshot.docs.map((user) async {
-      final d = user.data() as Map<String, dynamic>;
+    final data = await Future.wait(snapshot.docs.map((trabajador) async {
+      final d = trabajador.data() as Map<String, dynamic>;
 
       final serviciosSnapshot = await db
-          .collection('usuarios')
-          .doc(user.id)
+          .collection('trabajadores')
+          .doc(trabajador.id)
           .collection('servicios')
           .orderBy('fecha')
           .get();
       final notasSnapshot = await db
-          .collection('usuarios')
-          .doc(user.id)
+          .collection('trabajadores')
+          .doc(trabajador.id)
           .collection('notas')
           .orderBy('fecha', descending: true)
           .get();
@@ -218,19 +216,19 @@ class _UsuariosDetalleScreenState extends State<UsuariosDetalleScreen> {
 
   // 🔹 Exportar Excel con Servicios y Notas
   Future<void> _exportExcel() async {
-    final snapshot = await db.collection('usuarios').get();
-    final data = await Future.wait(snapshot.docs.map((user) async {
-      final d = user.data() as Map<String, dynamic>;
+    final snapshot = await db.collection('trabajadores').get();
+    final data = await Future.wait(snapshot.docs.map((trabajador) async {
+      final d = trabajador.data() as Map<String, dynamic>;
 
       final serviciosSnapshot = await db
-          .collection('usuarios')
-          .doc(user.id)
+          .collection('trabajadores')
+          .doc(trabajador.id)
           .collection('servicios')
           .orderBy('fecha')
           .get();
       final notasSnapshot = await db
-          .collection('usuarios')
-          .doc(user.id)
+          .collection('trabajadores')
+          .doc(trabajador.id)
           .collection('notas')
           .orderBy('fecha', descending: true)
           .get();
@@ -256,7 +254,7 @@ class _UsuariosDetalleScreenState extends State<UsuariosDetalleScreen> {
     }).toList());
 
     var excel = Excel.createExcel();
-    Sheet sheet = excel['Usuarios'];
+    Sheet sheet = excel['Trabajadores'];
     sheet.appendRow(['Nombre', 'Rol', 'Info Personal', 'Servicios', 'Notas']);
     for (var d in data) {
       sheet.appendRow([d['nombre'], d['rol'], d['infoPersonal'], d['servicios'], d['notas']]);
@@ -269,12 +267,12 @@ class _UsuariosDetalleScreenState extends State<UsuariosDetalleScreen> {
       final blob = html.Blob([bytes]);
       final url = html.Url.createObjectUrlFromBlob(blob);
       final anchor = html.AnchorElement(href: url)
-        ..setAttribute("download", "usuarios.xlsx")
+        ..setAttribute("download", "trabajadores.xlsx")
         ..click();
       html.Url.revokeObjectUrl(url);
     } else {
       final directory = await getApplicationDocumentsDirectory();
-      final filePath = "${directory.path}/usuarios.xlsx";
+      final filePath = "${directory.path}/trabajadores.xlsx";
       final file = File(filePath);
       await file.writeAsBytes(bytes, flush: true);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Excel guardado en: $filePath')));

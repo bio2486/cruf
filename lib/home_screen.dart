@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'admin_screen.dart';
 import 'trabajadores_screen.dart';
 import 'usuariosDashboard.dart';
+import 'trabajadoresDashboard.dart';
+import 'recordatorios_screen.dart'; 
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -18,12 +20,12 @@ class HomeScreen extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         onTap: onTap,
         child: SizedBox(
-          width: 120, // 🔹 más pequeño
+          width: 120,
           height: 120,
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 40, color: Colors.blueAccent), // 🔹 icono más chico
+              Icon(icon, size: 40, color: Colors.blueAccent),
               const SizedBox(height: 8),
               Text(
                 title,
@@ -42,8 +44,9 @@ class HomeScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Menú Principal"),
-        backgroundColor: Colors.blueAccent,
+        backgroundColor: const Color.fromARGB(255, 218, 92, 230),
         centerTitle: true,
+        automaticallyImplyLeading: false, // 🔹 Quita solo el botón de volver del AppBar
       ),
       body: Center(
         child: Wrap(
@@ -53,7 +56,7 @@ class HomeScreen extends StatelessWidget {
           children: [
             _buildCardButton(
               icon: Icons.person,
-              title: "Usuarios",
+              title: "Clientes",
               onTap: () {
                 Navigator.push(
                   context,
@@ -62,30 +65,50 @@ class HomeScreen extends StatelessWidget {
               },
             ),
             _buildCardButton(
-              icon: Icons.settings,
+              icon: Icons.engineering,
               title: "Trabajadores",
               onTap: () {
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const TrabajadoresScreen()),
-                  );
+                );
               },
             ),
             _buildCardButton(
-              icon: Icons.info,
-              title: "Usuarios Dashboard",
+              icon: Icons.dashboard,
+              title: "Clientes Dashboard",
               onTap: () {
-                 Navigator.push(
+                Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const UsuariosDetalleScreen()),
-                  );
+                );
+              },
+            ),
+            _buildCardButton(
+              icon: Icons.bar_chart,
+              title: "Trabajadores Dashboard",
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const TrabajadoresDashboard()),
+                );
+              },
+            ),
+            _buildCardButton(
+              icon: Icons.note,
+              title: "Recordatorios",
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const RecordatoriosScreen()),
+                );
               },
             ),
             _buildCardButton(
               icon: Icons.logout,
               title: "Salir",
               onTap: () {
-                Navigator.pop(context); // volver al login
+                Navigator.pop(context); // 🔹 Mantener el botón de salir
               },
             ),
           ],
