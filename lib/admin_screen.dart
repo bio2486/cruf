@@ -99,14 +99,14 @@ class _AdminScreenState extends State<AdminScreen> {
           stream: db.collection('usuarios').snapshots(),
           builder: (context, snapshot) {
             final total = snapshot.hasData ? snapshot.data!.docs.length : 0;
-            return Text("Administración de Usuarios ($total)");
+            return Text("Administración de clientes ($total)");
           },
         ),
         backgroundColor: Colors.blueAccent,
         actions: [
           IconButton(
             icon: const Icon(Icons.person_add),
-            tooltip: "Agregar Usuario",
+            tooltip: "Agregar cliente",
             onPressed: _showAddUserDialog,
           ),
         ],
@@ -156,7 +156,7 @@ class _AdminScreenState extends State<AdminScreen> {
               final filteredUsers = usersData.where(_matchesSearch).toList();
 
               if (filteredUsers.isEmpty) {
-                return const Center(child: Text("No se encontraron usuarios."));
+                return const Center(child: Text("No se encontraron clientes."));
               }
 
               return ListView.builder(
@@ -225,8 +225,8 @@ class _AdminScreenState extends State<AdminScreen> {
                                 onPressed: () => _showEditUserDialog(userId, data)),
                             IconButton(
                                 icon: const Icon(Icons.delete, color: Colors.red),
-                                tooltip: "Eliminar Usuario",
-                                onPressed: () => _confirmDeletion(context, "Eliminar este usuario?", () {
+                                tooltip: "Eliminar Cliente",
+                                onPressed: () => _confirmDeletion(context, "Eliminar este cliente?", () {
                                   db.collection('usuarios').doc(userId).delete();
                                 })),
                           ],
@@ -284,7 +284,7 @@ class _AdminScreenState extends State<AdminScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Agregar Usuario"),
+        title: const Text("Agregar Cliente"),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -315,7 +315,7 @@ class _AdminScreenState extends State<AdminScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Editar Usuario"),
+        title: const Text("Editar Cliente"),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [

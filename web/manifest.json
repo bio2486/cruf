@@ -1,11 +1,11 @@
 {
-    "name": "b25_oposiciones",
-    "short_name": "b25_oposiciones",
+    "name": "GESTOR",
+    "short_name": "GESTOR",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "CRUD DE GESTION Y ADMINISTRACIÓN.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

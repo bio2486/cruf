@@ -25,9 +25,20 @@ class _TrabajadoresDashboardState extends State<TrabajadoresDashboard> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Detalle de Trabajadores"),
+        title: StreamBuilder<QuerySnapshot>(
+          stream: db.collection('trabajadores').snapshots(),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) return const Text("Detalle de Trabajadores");
+            final total = snapshot.data!.docs.length;
+            return Text(
+              "Detalle de Trabajadores  |  Total: $total",
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            );
+          },
+        ),
         backgroundColor: const Color.fromARGB(255, 16, 207, 51),
         actions: [
+          IconButton(icon: const Icon(Icons.add), tooltip: "Añadir trabajador", onPressed: _crearTrabajador),
           PopupMenuButton<String>(
             onSelected: (value) {
               if (value == 'pdf') _exportPdf();
@@ -42,7 +53,6 @@ class _TrabajadoresDashboardState extends State<TrabajadoresDashboard> {
       ),
       body: Column(
         children: [
-          // Buscador
           Padding(
             padding: const EdgeInsets.all(12.0),
             child: TextField(
@@ -50,20 +60,13 @@ class _TrabajadoresDashboardState extends State<TrabajadoresDashboard> {
                 labelText: "Buscar en la tabla",
                 prefixIcon: const Icon(Icons.search),
                 suffixIcon: _searchQuery.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear),
-                        onPressed: () => setState(() => _searchQuery = ""),
-                      )
+                    ? IconButton(icon: const Icon(Icons.clear), onPressed: () => setState(() => _searchQuery = ""))
                     : null,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
               onChanged: (value) => setState(() => _searchQuery = value.toLowerCase().trim()),
             ),
           ),
-
-          // Tabla con scroll
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: db.collection('trabajadores').snapshots(),
@@ -72,86 +75,186 @@ class _TrabajadoresDashboardState extends State<TrabajadoresDashboard> {
                 final trabajadores = snapshot.data!.docs;
                 if (trabajadores.isEmpty) return const Center(child: Text("No hay trabajadores."));
 
-                final filteredTrabajadores = trabajadores.where((trabajador) {
+                // --- Aquí hacemos una lectura (solo para búsqueda) de las subcolecciones servicios y notas
+                //     No se modifica ninguna lógica de CRUD ni se toca el resto del código.
+                final futures = trabajadores.map((trabajador) async {
                   final data = trabajador.data() as Map<String, dynamic>;
-                  final nombre = (data['nombre'] ?? "").toString().toLowerCase();
-                  final rol = (data['rol'] ?? "").toString().toLowerCase();
-                  final infoPersonal = (data['infoPersonal'] ?? {}).toString().toLowerCase();
-                  return nombre.contains(_searchQuery) ||
-                      rol.contains(_searchQuery) ||
-                      infoPersonal.contains(_searchQuery);
+
+                  // Info personal transformada a texto para búsqueda
+                  final infoMap = (data['infoPersonal'] ?? {}) as Map<String, dynamic>;
+                  final infoPersonalText = infoMap.isNotEmpty
+                      ? infoMap.entries.map((e) {
+                          final v = e.value;
+                          if (v is Timestamp) {
+                            return "${e.key}: ${DateFormat('dd/MM/yyyy').format(v.toDate())}";
+                          }
+                          return "${e.key}: ${v?.toString() ?? ''}";
+                        }).join(" | ")
+                      : "";
+
+                  // Obtener servicios (solo para indexar en la búsqueda)
+                  final serviciosSnapshot = await db
+                      .collection('trabajadores')
+                      .doc(trabajador.id)
+                      .collection('servicios')
+                      .orderBy('fecha')
+                      .get();
+                  final serviciosText = serviciosSnapshot.docs.isEmpty
+                      ? ""
+                      : serviciosSnapshot.docs.map((s) {
+                          final sData = s.data() as Map<String, dynamic>;
+                          String fecha = "";
+                          if (sData['fecha'] != null && sData['fecha'] is Timestamp) {
+                            fecha = DateFormat('dd/MM/yyyy').format((sData['fecha'] as Timestamp).toDate());
+                          }
+                          return "${sData['nombre'] ?? ''} $fecha".trim();
+                        }).join(" | ");
+
+                  // Obtener notas (solo para indexar en la búsqueda)
+                  final notasSnapshot = await db
+                      .collection('trabajadores')
+                      .doc(trabajador.id)
+                      .collection('notas')
+                      .orderBy('fecha', descending: true)
+                      .get();
+                  final notasText = notasSnapshot.docs.isEmpty
+                      ? ""
+                      : notasSnapshot.docs.map((n) {
+                          final nData = n.data() as Map<String, dynamic>;
+                          return nData['nota']?.toString() ?? "";
+                        }).join(" | ");
+
+                  return {
+                    'doc': trabajador,
+                    'data': data,
+                    'infoPersonalText': infoPersonalText.toLowerCase(),
+                    'serviciosText': serviciosText.toLowerCase(),
+                    'notasText': notasText.toLowerCase(),
+                  };
                 }).toList();
 
-                return SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(minWidth: MediaQuery.of(context).size.width),
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.vertical,
-                      child: DataTable(
-                        columnSpacing: 20,
-                        dataRowMinHeight: 70,
-                        dataRowMaxHeight: 200,
-                        columns: const [
-                          DataColumn(label: Text("Nombre", style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text("Rol", style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text("Info Personal", style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text("Servicios", style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text("Notas", style: TextStyle(fontWeight: FontWeight.bold))),
-                        ],
-                        rows: filteredTrabajadores.map((trabajador) {
-                          final data = trabajador.data() as Map<String, dynamic>;
-                          final info = (data['infoPersonal'] ?? {}) as Map<String, dynamic>;
-                          String infoPersonalText = info.isNotEmpty
-                              ? info.entries.map((e) => e.value is Timestamp
-                                  ? "${e.key}: ${DateFormat('dd/MM/yyyy').format((e.value as Timestamp).toDate())}"
-                                  : "${e.key}: ${e.value}").join("\n")
-                              : "-";
+                return FutureBuilder<List<Map<String, dynamic>>>(
+                  future: Future.wait(futures),
+                  builder: (context, enrichedSnapshot) {
+                    if (!enrichedSnapshot.hasData) return const Center(child: CircularProgressIndicator());
+                    final enriched = enrichedSnapshot.data!;
 
-                          return DataRow(cells: [
-                            DataCell(Text(data['nombre'] ?? "-")),
-                            DataCell(Text(data['rol'] ?? "-")),
-                            DataCell(Text(infoPersonalText)),
-                            DataCell(FutureBuilder<QuerySnapshot>(
-                              future: db
-                                  .collection('trabajadores')
-                                  .doc(trabajador.id)
-                                  .collection('servicios')
-                                  .orderBy('fecha')
-                                  .get(),
-                              builder: (context, serviciosSnapshot) {
-                                if (!serviciosSnapshot.hasData) return const Text("-");
-                                final servicios = serviciosSnapshot.data!.docs;
-                                return Text(servicios.isEmpty
-                                    ? "-"
-                                    : servicios.map((s) {
-                                        final sData = s.data() as Map<String, dynamic>;
-                                        String fecha = "";
-                                        if (sData['fecha'] != null && sData['fecha'] is Timestamp) {
-                                          fecha = DateFormat('dd/MM/yyyy').format((sData['fecha'] as Timestamp).toDate());
+                    // Filtrar por nombre, rol, infoPersonal, servicios y notas
+                    final filtered = enriched.where((e) {
+                      final data = e['data'] as Map<String, dynamic>;
+                      final nombre = (data['nombre'] ?? "").toString().toLowerCase();
+                      final rol = (data['rol'] ?? "").toString().toLowerCase();
+                      final infoPersonalText = (e['infoPersonalText'] ?? "").toString();
+                      final serviciosText = (e['serviciosText'] ?? "").toString();
+                      final notasText = (e['notasText'] ?? "").toString();
+
+                      final q = _searchQuery;
+                      if (q.isEmpty) return true;
+
+                      return nombre.contains(q) ||
+                          rol.contains(q) ||
+                          infoPersonalText.contains(q) ||
+                          serviciosText.contains(q) ||
+                          notasText.contains(q);
+                    }).toList();
+
+                    if (filtered.isEmpty) return const Center(child: Text("No hay trabajadores que coincidan con la búsqueda."));
+
+                    return SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(minWidth: MediaQuery.of(context).size.width),
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.vertical,
+                          child: DataTable(
+                            columnSpacing: 20,
+                            dataRowMinHeight: 70,
+                            dataRowMaxHeight: 100,
+                            columns: const [
+                              DataColumn(label: Text("N°", style: TextStyle(fontWeight: FontWeight.bold))),
+                              DataColumn(label: Text("Nombre", style: TextStyle(fontWeight: FontWeight.bold))),
+                              DataColumn(label: Text("Rol", style: TextStyle(fontWeight: FontWeight.bold))),
+                              DataColumn(label: Text("Info Personal", style: TextStyle(fontWeight: FontWeight.bold))),
+                              DataColumn(label: Text("Servicios", style: TextStyle(fontWeight: FontWeight.bold))),
+                              DataColumn(label: Text("Notas", style: TextStyle(fontWeight: FontWeight.bold))),
+                              DataColumn(label: Text("Acciones", style: TextStyle(fontWeight: FontWeight.bold))),
+                            ],
+                            rows: List.generate(filtered.length, (index) {
+                              final item = filtered[index];
+                              final trabajador = item['doc'] as QueryDocumentSnapshot;
+                              final data = item['data'] as Map<String, dynamic>;
+                              final info = (data['infoPersonal'] ?? {}) as Map<String, dynamic>;
+                              String infoPersonalText = info.isNotEmpty
+                                  ? info.entries.map((e) => e.value is Timestamp
+                                      ? "${e.key}: ${DateFormat('dd/MM/yyyy').format((e.value as Timestamp).toDate())}"
+                                      : "${e.key}: ${e.value}").join("\n")
+                                  : "-";
+
+                              return DataRow(cells: [
+                                DataCell(Text("${index + 1}")),
+                                DataCell(Text(data['nombre'] ?? "-")),
+                                DataCell(Text(data['rol'] ?? "-")),
+                                DataCell(Text(infoPersonalText)),
+                                DataCell(StreamBuilder<QuerySnapshot>(
+                                  stream: db.collection('trabajadores').doc(trabajador.id).collection('servicios').orderBy('fecha').snapshots(),
+                                  builder: (context, serviciosSnapshot) {
+                                    if (!serviciosSnapshot.hasData) return const Text("-");
+                                    final servicios = serviciosSnapshot.data!.docs;
+                                    return Text(servicios.isEmpty
+                                        ? "-"
+                                        : servicios.map((s) {
+                                            final sData = s.data() as Map<String, dynamic>;
+                                            String fecha = "";
+                                            if (sData['fecha'] != null && sData['fecha'] is Timestamp) {
+                                              fecha = DateFormat('dd/MM/yyyy').format((sData['fecha'] as Timestamp).toDate());
+                                            }
+                                            return "${sData['nombre'] ?? ''} ($fecha)";
+                                          }).join("\n"));
+                                  },
+                                )),
+                                DataCell(StreamBuilder<QuerySnapshot>(
+                                  stream: db.collection('trabajadores').doc(trabajador.id).collection('notas').orderBy('fecha', descending: true).snapshots(),
+                                  builder: (context, notaSnapshot) {
+                                    if (!notaSnapshot.hasData) return const Text("-");
+                                    final notas = notaSnapshot.data!.docs;
+                                    return Text(notas.isEmpty ? "-" : notas.map((n) => n['nota'] ?? "").join("\n"));
+                                  },
+                                )),
+                                DataCell(Row(
+                                  children: [
+                                    IconButton(
+                                      icon: const Icon(Icons.edit, color: Colors.blue),
+                                      onPressed: () => _editarTrabajador(trabajador.id, data),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.delete, color: Colors.red),
+                                      onPressed: () async {
+                                        final confirm = await showDialog<bool>(
+                                          context: context,
+                                          builder: (ctx) => AlertDialog(
+                                            title: const Text("Confirmar eliminación"),
+                                            content: Text("¿Seguro que deseas eliminar a ${data['nombre']}?"),
+                                            actions: [
+                                              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancelar")),
+                                              ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Eliminar")),
+                                            ],
+                                          ),
+                                        );
+                                        if (confirm == true) {
+                                          await db.collection('trabajadores').doc(trabajador.id).delete();
+                                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Trabajador eliminado")));
                                         }
-                                        return "${sData['nombre'] ?? ''} ($fecha)";
-                                      }).join("\n"));
-                              },
-                            )),
-                            DataCell(FutureBuilder<QuerySnapshot>(
-                              future: db
-                                  .collection('trabajadores')
-                                  .doc(trabajador.id)
-                                  .collection('notas')
-                                  .orderBy('fecha', descending: true)
-                                  .get(),
-                              builder: (context, notaSnapshot) {
-                                if (!notaSnapshot.hasData) return const Text("-");
-                                final notas = notaSnapshot.data!.docs;
-                                return Text(notas.isEmpty ? "-" : notas.map((n) => n['nota'] ?? "").join("\n"));
-                              },
-                            )),
-                          ]);
-                        }).toList(),
+                                      },
+                                    ),
+                                  ],
+                                )),
+                              ]);
+                            }),
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
+                    );
+                  },
                 );
               },
             ),
@@ -161,33 +264,233 @@ class _TrabajadoresDashboardState extends State<TrabajadoresDashboard> {
     );
   }
 
-  // 🔹 Exportar PDF con Servicios y Notas
+  // Crear trabajador
+  void _crearTrabajador() {
+    _abrirFormulario();
+  }
+
+  // Editar trabajador
+  void _editarTrabajador(String id, Map<String, dynamic> data) {
+    _abrirFormulario(id: id, data: data);
+  }
+
+  // Formulario crear/editar con CRUD completo de infoPersonal, servicios y notas
+  void _abrirFormulario({String? id, Map<String, dynamic>? data}) async {
+    final nombreController = TextEditingController(text: data?['nombre']);
+    final rolController = TextEditingController(text: data?['rol']);
+
+    // Listas de infoPersonal, servicios y notas
+    List<Map<String, dynamic>> infoPersonal = [];
+    List<Map<String, dynamic>> servicios = [];
+    List<Map<String, dynamic>> notas = [];
+
+    if (id != null) {
+      final info = (data?['infoPersonal'] ?? {}) as Map<String, dynamic>;
+      infoPersonal = info.entries.map((e) => {"key": e.key, "value": e.value}).toList();
+
+      final serviciosSnapshot = await db.collection('trabajadores').doc(id).collection('servicios').orderBy('fecha').get();
+      servicios = serviciosSnapshot.docs.map((s) => {"id": s.id, "nombre": s['nombre'], "fecha": (s['fecha'] as Timestamp).toDate()}).toList();
+
+      final notasSnapshot = await db.collection('trabajadores').doc(id).collection('notas').orderBy('fecha', descending: true).get();
+      notas = notasSnapshot.docs.map((n) => {"id": n.id, "nota": n['nota'], "fecha": (n['fecha'] as Timestamp).toDate()}).toList();
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setState) => AlertDialog(
+            title: Text(id == null ? "Nuevo trabajador" : "Editar trabajador"),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(controller: nombreController, decoration: const InputDecoration(labelText: "Nombre")),
+                  TextField(controller: rolController, decoration: const InputDecoration(labelText: "Rol")),
+                  const SizedBox(height: 20),
+                  const Text("Info Personal", style: TextStyle(fontWeight: FontWeight.bold)),
+                  ...infoPersonal.map((info) {
+                    final keyCtrl = TextEditingController(text: info['key']);
+                    final valueCtrl = TextEditingController(text: info['value']?.toString() ?? "");
+                    return Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: keyCtrl,
+                            decoration: const InputDecoration(labelText: "Campo"),
+                            onChanged: (v) => info['key'] = v,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: TextField(
+                            controller: valueCtrl,
+                            decoration: const InputDecoration(labelText: "Valor"),
+                            onChanged: (v) => info['value'] = v,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.red),
+                          onPressed: () => setState(() => infoPersonal.remove(info)),
+                        ),
+                      ],
+                    );
+                  }),
+                  TextButton.icon(
+                    icon: const Icon(Icons.add),
+                    label: const Text("Añadir info personal"),
+                    onPressed: () => setState(() => infoPersonal.add({"key": "", "value": ""})),
+                  ),
+                  const SizedBox(height: 20),
+                  const Text("Servicios", style: TextStyle(fontWeight: FontWeight.bold)),
+                  ...servicios.map((s) {
+                    final nombreCtrl = TextEditingController(text: s["nombre"]);
+                    return Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: nombreCtrl,
+                            decoration: const InputDecoration(labelText: "Servicio"),
+                            onChanged: (v) => s["nombre"] = v,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.calendar_today),
+                          onPressed: () async {
+                            DateTime? picked = await showDatePicker(
+                              context: context,
+                              initialDate: s["fecha"] ?? DateTime.now(),
+                              firstDate: DateTime(2000),
+                              lastDate: DateTime(2100),
+                            );
+                            if (picked != null) setState(() => s["fecha"] = picked);
+                          },
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.red),
+                          onPressed: () {
+                            setState(() => servicios.remove(s));
+                            if (id != null && s["id"] != null) db.collection('trabajadores').doc(id).collection('servicios').doc(s["id"]).delete();
+                          },
+                        ),
+                      ],
+                    );
+                  }),
+                  TextButton.icon(
+                    icon: const Icon(Icons.add),
+                    label: const Text("Añadir servicio"),
+                    onPressed: () => setState(() => servicios.add({"nombre": "", "fecha": DateTime.now()})),
+                  ),
+                  const SizedBox(height: 20),
+                  const Text("Notas", style: TextStyle(fontWeight: FontWeight.bold)),
+                  ...notas.map((n) {
+                    final notaCtrl = TextEditingController(text: n["nota"]);
+                    return Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: notaCtrl,
+                            decoration: const InputDecoration(labelText: "Nota"),
+                            onChanged: (v) => n["nota"] = v,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.red),
+                          onPressed: () {
+                            setState(() => notas.remove(n));
+                            if (id != null && n["id"] != null) db.collection('trabajadores').doc(id).collection('notas').doc(n["id"]).delete();
+                          },
+                        ),
+                      ],
+                    );
+                  }),
+                  TextButton.icon(
+                    icon: const Icon(Icons.add),
+                    label: const Text("Añadir nota"),
+                    onPressed: () => setState(() => notas.add({"nota": "", "fecha": DateTime.now()})),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancelar")),
+              ElevatedButton(
+                onPressed: () async {
+                  DocumentReference ref;
+                  Map<String, dynamic> infoMap = {for (var i in infoPersonal) if (i['key'].toString().isNotEmpty) i['key']: i['value']};
+
+                  if (id == null) {
+                    ref = await db.collection('trabajadores').add({
+                      "nombre": nombreController.text,
+                      "rol": rolController.text,
+                      "infoPersonal": infoMap,
+                    });
+                  } else {
+                    ref = db.collection('trabajadores').doc(id);
+                    await ref.update({
+                      "nombre": nombreController.text,
+                      "rol": rolController.text,
+                      "infoPersonal": infoMap,
+                    });
+                  }
+
+                  // Guardar servicios
+                  for (var s in servicios) {
+                    if (s["id"] != null) {
+                      await ref.collection('servicios').doc(s["id"]).set({
+                        "nombre": s["nombre"],
+                        "fecha": Timestamp.fromDate(s["fecha"]),
+                      });
+                    } else {
+                      await ref.collection('servicios').add({
+                        "nombre": s["nombre"],
+                        "fecha": Timestamp.fromDate(s["fecha"]),
+                      });
+                    }
+                  }
+
+                  // Guardar notas
+                  for (var n in notas) {
+                    if (n["id"] != null) {
+                      await ref.collection('notas').doc(n["id"]).set({
+                        "nota": n["nota"],
+                        "fecha": Timestamp.fromDate(n["fecha"]),
+                      });
+                    } else {
+                      await ref.collection('notas').add({
+                        "nota": n["nota"],
+                        "fecha": Timestamp.fromDate(n["fecha"]),
+                      });
+                    }
+                  }
+
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(id == null ? "Trabajador creado" : "Trabajador actualizado")),
+                  );
+                },
+                child: const Text("Guardar"),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // Exportar PDF
   Future<void> _exportPdf() async {
     final snapshot = await db.collection('trabajadores').get();
     final pdf = pw.Document();
-
     final data = await Future.wait(snapshot.docs.map((trabajador) async {
       final d = trabajador.data() as Map<String, dynamic>;
-
-      final serviciosSnapshot = await db
-          .collection('trabajadores')
-          .doc(trabajador.id)
-          .collection('servicios')
-          .orderBy('fecha')
-          .get();
-      final notasSnapshot = await db
-          .collection('trabajadores')
-          .doc(trabajador.id)
-          .collection('notas')
-          .orderBy('fecha', descending: true)
-          .get();
+      final serviciosSnapshot = await db.collection('trabajadores').doc(trabajador.id).collection('servicios').orderBy('fecha').get();
+      final notasSnapshot = await db.collection('trabajadores').doc(trabajador.id).collection('notas').orderBy('fecha', descending: true).get();
 
       final serviciosText = serviciosSnapshot.docs.map((s) {
         final sData = s.data() as Map<String, dynamic>;
         String fecha = "";
-        if (sData['fecha'] != null && sData['fecha'] is Timestamp) {
-          fecha = DateFormat('dd/MM/yyyy').format((sData['fecha'] as Timestamp).toDate());
-        }
+        if (sData['fecha'] != null && sData['fecha'] is Timestamp) fecha = DateFormat('dd/MM/yyyy').format((sData['fecha'] as Timestamp).toDate());
         return "${sData['nombre'] ?? ''} ($fecha)";
       }).join("\n");
 
@@ -203,42 +506,27 @@ class _TrabajadoresDashboardState extends State<TrabajadoresDashboard> {
     }).toList());
 
     pdf.addPage(pw.Page(
-      build: (pw.Context context) {
-        return pw.Table.fromTextArray(
-          headers: ['Nombre', 'Rol', 'Info Personal', 'Servicios', 'Notas'],
-          data: data.map((d) => [d['nombre'], d['rol'], d['infoPersonal'], d['servicios'], d['notas']]).toList(),
-        );
-      },
+      build: (pw.Context context) => pw.Table.fromTextArray(
+        headers: ['Nombre', 'Rol', 'Info Personal', 'Servicios', 'Notas'],
+        data: data.map((d) => [d['nombre'], d['rol'], d['infoPersonal'], d['servicios'], d['notas']]).toList(),
+      ),
     ));
 
     await Printing.layoutPdf(onLayout: (format) async => pdf.save());
   }
 
-  // 🔹 Exportar Excel con Servicios y Notas
+  // Exportar Excel
   Future<void> _exportExcel() async {
     final snapshot = await db.collection('trabajadores').get();
     final data = await Future.wait(snapshot.docs.map((trabajador) async {
       final d = trabajador.data() as Map<String, dynamic>;
-
-      final serviciosSnapshot = await db
-          .collection('trabajadores')
-          .doc(trabajador.id)
-          .collection('servicios')
-          .orderBy('fecha')
-          .get();
-      final notasSnapshot = await db
-          .collection('trabajadores')
-          .doc(trabajador.id)
-          .collection('notas')
-          .orderBy('fecha', descending: true)
-          .get();
+      final serviciosSnapshot = await db.collection('trabajadores').doc(trabajador.id).collection('servicios').orderBy('fecha').get();
+      final notasSnapshot = await db.collection('trabajadores').doc(trabajador.id).collection('notas').orderBy('fecha', descending: true).get();
 
       final serviciosText = serviciosSnapshot.docs.map((s) {
         final sData = s.data() as Map<String, dynamic>;
         String fecha = "";
-        if (sData['fecha'] != null && sData['fecha'] is Timestamp) {
-          fecha = DateFormat('dd/MM/yyyy').format((sData['fecha'] as Timestamp).toDate());
-        }
+        if (sData['fecha'] != null && sData['fecha'] is Timestamp) fecha = DateFormat('dd/MM/yyyy').format((sData['fecha'] as Timestamp).toDate());
         return "${sData['nombre'] ?? ''} ($fecha)";
       }).join("\n");
 
@@ -260,22 +548,17 @@ class _TrabajadoresDashboardState extends State<TrabajadoresDashboard> {
       sheet.appendRow([d['nombre'], d['rol'], d['infoPersonal'], d['servicios'], d['notas']]);
     }
 
-    final bytes = excel.encode();
-    if (bytes == null) return;
-
     if (kIsWeb) {
+      final bytes = excel.encode()!;
       final blob = html.Blob([bytes]);
       final url = html.Url.createObjectUrlFromBlob(blob);
-      final anchor = html.AnchorElement(href: url)
-        ..setAttribute("download", "trabajadores.xlsx")
-        ..click();
+      final anchor = html.AnchorElement(href: url)..setAttribute("download", "trabajadores.xlsx")..click();
       html.Url.revokeObjectUrl(url);
     } else {
-      final directory = await getApplicationDocumentsDirectory();
-      final filePath = "${directory.path}/trabajadores.xlsx";
-      final file = File(filePath);
-      await file.writeAsBytes(bytes, flush: true);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Excel guardado en: $filePath')));
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File("${dir.path}/trabajadores.xlsx");
+      await file.writeAsBytes(excel.encode()!);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Archivo guardado en ${file.path}")));
     }
   }
 }

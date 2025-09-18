@@ -3,10 +3,14 @@ import 'admin_screen.dart';
 import 'trabajadores_screen.dart';
 import 'usuariosDashboard.dart';
 import 'trabajadoresDashboard.dart';
-import 'recordatorios_screen.dart'; 
+import 'recordatorios_screen.dart';
+import 'fichajes_screen.dart';
+import 'loginficha.dart';
 
 class HomeScreen extends StatelessWidget {
-  const HomeScreen({Key? key}) : super(key: key);
+  final String usuario; // ✅ Recibimos el usuario
+
+  const HomeScreen({Key? key, required this.usuario}) : super(key: key);
 
   Widget _buildCardButton({
     required IconData icon,
@@ -30,7 +34,8 @@ class HomeScreen extends StatelessWidget {
               Text(
                 title,
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                    fontSize: 14, fontWeight: FontWeight.bold),
               ),
             ],
           ),
@@ -43,10 +48,10 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Menú Principal"),
+        title: Text("Menú Principal - $usuario"), // ✅ mostramos el usuario
         backgroundColor: const Color.fromARGB(255, 218, 92, 230),
         centerTitle: true,
-        automaticallyImplyLeading: false, // 🔹 Quita solo el botón de volver del AppBar
+        automaticallyImplyLeading: false,
       ),
       body: Center(
         child: Wrap(
@@ -80,7 +85,7 @@ class HomeScreen extends StatelessWidget {
               onTap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const UsuariosDetalleScreen()),
+                  MaterialPageRoute(builder: (_) => const UsuariosDashboard()),
                 );
               },
             ),
@@ -90,7 +95,8 @@ class HomeScreen extends StatelessWidget {
               onTap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const TrabajadoresDashboard()),
+                  MaterialPageRoute(
+                      builder: (_) => const TrabajadoresDashboard()),
                 );
               },
             ),
@@ -105,10 +111,30 @@ class HomeScreen extends StatelessWidget {
               },
             ),
             _buildCardButton(
+              icon: Icons.assignment_turned_in,
+              title: "Fichajes Admin",
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const FichajesScreen()),
+                );
+              },
+            ),
+            _buildCardButton(
+              icon: Icons.login,
+              title: "Login Fichajes",
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LoginFichaScreen()),
+                );
+              },
+            ),
+            _buildCardButton(
               icon: Icons.logout,
               title: "Salir",
               onTap: () {
-                Navigator.pop(context); // 🔹 Mantener el botón de salir
+                Navigator.pop(context);
               },
             ),
           ],

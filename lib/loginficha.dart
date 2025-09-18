@@ -1,18 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'home_screen.dart';
+import 'fichar_screen.dart';
+import 'fichajes_screen.dart';
 
-class LoginScreen extends StatefulWidget {
-  const LoginScreen({Key? key}) : super(key: key);
+class LoginFichaScreen extends StatefulWidget {
+  const LoginFichaScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  State<LoginFichaScreen> createState() => _LoginFichaScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
-  final TextEditingController _usernameController = TextEditingController();
+class _LoginFichaScreenState extends State<LoginFichaScreen> {
+  final TextEditingController _userController = TextEditingController();
   final FirebaseFirestore db = FirebaseFirestore.instance;
-
   bool _loading = false;
   String? _error;
 
@@ -24,24 +24,37 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       final query = await db
-          .collection("admins")
-          .where("username", isEqualTo: _usernameController.text.trim())
+          .collection("fichadores")
+          .where("usuario", isEqualTo: _userController.text.trim())
+          .where("activo", isEqualTo: true)
           .limit(1)
           .get();
 
       if (query.docs.isNotEmpty) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const HomeScreen(usuario: '',)),
-        );
+        final data = query.docs.first.data();
+
+        final String rol = data["rol"] ?? "user";
+        final String usuario = data["usuario"];
+
+        if (rol == "admin") {
+           Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => FichajesScreen()),
+          );
+        } else {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => FicharScreen(usuario: usuario)),
+          );
+        }
       } else {
         setState(() {
-          _error = "Usuario incorrecto";
+          _error = "Usuario no encontrado o inactivo";
         });
       }
     } catch (e) {
       setState(() {
-        _error = "Error de conexión: $e";
+        _error = "Error: $e";
       });
     } finally {
       setState(() {
@@ -70,21 +83,16 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               margin: const EdgeInsets.symmetric(horizontal: 28, vertical: 20),
               child: Padding(
-                padding: const EdgeInsets.all(32.0),
+                padding: const EdgeInsets.all(32.0), // 🔹 Un poco más amplio
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // 🔹 Logo
-                    Image.asset(
-                      "assets/images/logo.png",
-                      height: 100,
-                    ),
+                    const Icon(Icons.school, size: 100, color: Colors.blueAccent), // 🔹 Un poco más grande
                     const SizedBox(height: 18),
-
                     const Text(
-                      "Acceso Admin",
+                      "Acceso al sistema educativo",
                       style: TextStyle(
-                        fontSize: 20,
+                        fontSize: 20, // 🔹 Tamaño intermedio
                         fontWeight: FontWeight.bold,
                         color: Colors.black87,
                       ),
@@ -92,13 +100,11 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: 25),
 
-                    // 🔹 Campo usuario
+                    // Campo usuario
                     SizedBox(
-                      width: 280,
+                      width: 280, // 🔹 Más ancho que antes (220 → 240)
                       child: TextField(
-                        controller: _usernameController,
-                        textInputAction: TextInputAction.done,
-                        onSubmitted: (_) => _login(),
+                        controller: _userController,
                         decoration: InputDecoration(
                           labelText: "Usuario",
                           border: OutlineInputBorder(
@@ -110,24 +116,21 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: 20),
 
-                    // 🔹 Mensaje de error
+                    // Mensaje error
                     if (_error != null)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 12),
                         child: Text(
                           _error!,
-                          style: const TextStyle(
-                            color: Colors.red,
-                            fontSize: 15,
-                          ),
+                          style: const TextStyle(color: Colors.red, fontSize: 15),
                           textAlign: TextAlign.center,
                         ),
                       ),
 
-                    // 🔹 Botón login
+                    // Botón
                     SizedBox(
                       width: 280,
-                      height: 50,
+                      height: 50, // 🔹 Un poco más alto que antes (45 → 50)
                       child: ElevatedButton(
                         onPressed: _loading ? null : _login,
                         style: ElevatedButton.styleFrom(
@@ -137,13 +140,10 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ),
                         child: _loading
-                            ? const CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2,
-                              )
+                            ? const CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
                             : const Text(
                                 "Entrar",
-                                style: TextStyle(fontSize: 17),
+                                style: TextStyle(fontSize: 17), // 🔹 Un poco más grande
                               ),
                       ),
                     ),
