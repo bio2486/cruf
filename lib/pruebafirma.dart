@@ -1,11 +1,8 @@
-import 'dart:typed_data';
-import 'dart:ui' as ui;
-
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:intl/intl.dart';
-import 'package:signature/signature.dart';
+import 'package:intl/date_symbol_data_local.dart';
+
 
 class FicharScreen extends StatefulWidget {
   final String usuario;
@@ -22,7 +19,7 @@ class _FicharScreenState extends State<FicharScreen> {
   String? _mensaje;
   String? _nombreUsuario;
 
-  // Control de registros del día
+  // Map para controlar si cada tipo ya fue registrado hoy
   Map<String, bool> _yaRegistradoHoy = {
     "entrada": false,
     "salida": false,
@@ -71,6 +68,7 @@ class _FicharScreenState extends State<FicharScreen> {
         .where("fecha", isEqualTo: fechaHoy)
         .get();
 
+    // Marcar cada tipo de registro que ya existe hoy
     for (var doc in snapshot.docs) {
       final tipo = (doc.data()['tipo'] ?? '').toString().toLowerCase();
       if (_yaRegistradoHoy.containsKey(tipo)) {
@@ -81,11 +79,7 @@ class _FicharScreenState extends State<FicharScreen> {
   }
 
   Future<void> _registrar(String tipo,
-      {String? justificacion,
-      String? fecha,
-      String? hora,
-      String? nombre,
-      Uint8List? firmaBytes}) async {
+      {String? justificacion, String? fecha, String? hora, String? nombre}) async {
     setState(() {
       _loading = true;
       _mensaje = null;
@@ -97,18 +91,6 @@ class _FicharScreenState extends State<FicharScreen> {
       final registroHora = hora ?? DateFormat('HH:mm').format(DateTime.now());
       final registroNombre = nombre ?? _nombreUsuario ?? widget.usuario;
 
-      String? firmaUrl;
-
-      // 🔹 Subir la firma a Firebase Storage si existe
-      if (firmaBytes != null) {
-        final ref = FirebaseStorage.instance
-            .ref()
-            .child("firmas/${widget.usuario}_${DateTime.now().millisecondsSinceEpoch}.png");
-        await ref.putData(firmaBytes);
-        firmaUrl = await ref.getDownloadURL();
-      }
-
-      // 🔹 Guardar en Firestore
       await db.collection("registros").add({
         "usuario": widget.usuario,
         "fecha": registroFecha,
@@ -116,13 +98,12 @@ class _FicharScreenState extends State<FicharScreen> {
         "nombre": registroNombre,
         "tipo": tipo,
         "justificacion": justificacion ?? "",
-        "firmaUrl": firmaUrl ?? "",
       });
 
       setState(() {
         _mensaje =
             "Registro de $tipo guardado${justificacion != null ? ' con justificación' : ''}";
-        _yaRegistradoHoy[tipo] = true;
+        _yaRegistradoHoy[tipo] = true; // Marcar tipo registrado
       });
     } catch (e) {
       setState(() {
@@ -139,8 +120,7 @@ class _FicharScreenState extends State<FicharScreen> {
       {bool pedirJustificacion = false}) async {
     if (_yaRegistradoHoy[tipo] == true) {
       setState(() {
-        _mensaje =
-            "Ya has registrado $tipo hoy. Solo se permite un registro por día para este tipo.";
+        _mensaje = "Ya has registrado $tipo hoy. Solo se permite un registro por día para este tipo.";
       });
       return;
     }
@@ -151,7 +131,6 @@ class _FicharScreenState extends State<FicharScreen> {
     final nombre = _nombreUsuario ?? widget.usuario;
 
     String? justificacion;
-    Uint8List? firmaBytes;
 
     if (pedirJustificacion) {
       justificacion = await showDialog<String>(
@@ -195,65 +174,41 @@ class _FicharScreenState extends State<FicharScreen> {
       if (justificacion == null || justificacion.trim().isEmpty) {
         return;
       }
+    } else {
+      final confirmado = await showDialog<bool>(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            title: Text("Confirmar $tipo"),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text("Nombre: $nombre"),
+                Text("Fecha: $fecha"),
+                Text("Hora: $hora"),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text("Cancelar"),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text("Confirmar"),
+              ),
+            ],
+          );
+        },
+      );
+      if (confirmado != true) return;
     }
 
-    // 🔹 Pedir firma
-    firmaBytes = await _capturarFirma();
-
-    if (firmaBytes == null) return; // cancelado
-
     _registrar(tipo,
-        fecha: fecha,
-        hora: hora,
-        nombre: nombre,
-        justificacion: justificacion,
-        firmaBytes: firmaBytes);
-  }
-
-  /// 🔹 Dialog para capturar firma
-  Future<Uint8List?> _capturarFirma() async {
-    final firmaController = SignatureController(penStrokeWidth: 2);
-    return await showDialog<Uint8List>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text("Firma digital"),
-          content: SizedBox(
-            width: double.maxFinite,
-            height: 200,
-            child: Signature(
-              controller: firmaController,
-              backgroundColor: Colors.grey[200]!,
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                firmaController.clear();
-              },
-              child: const Text("Borrar"),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context, null);
-              },
-              child: const Text("Cancelar"),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                final ui.Image? image = await firmaController.toImage();
-                if (image != null) {
-                  final data =
-                      await image.toByteData(format: ui.ImageByteFormat.png);
-                  Navigator.pop(context, data?.buffer.asUint8List());
-                }
-              },
-              child: const Text("Guardar"),
-            ),
-          ],
-        );
-      },
-    );
+        fecha: fecha, hora: hora, nombre: nombre, justificacion: justificacion);
   }
 
   @override
@@ -298,20 +253,21 @@ class _FicharScreenState extends State<FicharScreen> {
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 30),
+
                     if (_mensaje != null)
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         child: Text(
                           _mensaje!,
-                          style: const TextStyle(
-                              color: Colors.green, fontSize: 16),
+                          style:
+                              const TextStyle(color: Colors.green, fontSize: 16),
                           textAlign: TextAlign.center,
                         ),
                       ),
+
                     if (_loading) const CircularProgressIndicator(),
                     const SizedBox(height: 30),
 
-                    // Botón entrada
                     SizedBox(
                       width: 250,
                       height: 60,
@@ -331,16 +287,14 @@ class _FicharScreenState extends State<FicharScreen> {
                     ),
                     const SizedBox(height: 20),
 
-                    // Botón justificación
                     SizedBox(
                       width: 250,
                       height: 60,
                       child: ElevatedButton.icon(
-                        onPressed:
-                            (_loading || _yaRegistradoHoy["justificacion"] == true)
-                                ? null
-                                : () => _confirmarRegistro("justificacion",
-                                    pedirJustificacion: true),
+                        onPressed: (_loading || _yaRegistradoHoy["justificacion"] == true)
+                            ? null
+                            : () =>
+                                _confirmarRegistro("justificacion", pedirJustificacion: true),
                         icon: const Icon(Icons.edit_calendar),
                         label: const Text("Entrada justificada"),
                         style: ElevatedButton.styleFrom(
@@ -353,7 +307,6 @@ class _FicharScreenState extends State<FicharScreen> {
                     ),
                     const SizedBox(height: 20),
 
-                    // Botón salida
                     SizedBox(
                       width: 250,
                       height: 60,
@@ -373,7 +326,6 @@ class _FicharScreenState extends State<FicharScreen> {
                     ),
                     const SizedBox(height: 20),
 
-                    // Botón cerrar sesión
                     TextButton.icon(
                       onPressed: () {
                         Navigator.pushReplacementNamed(context, "/");

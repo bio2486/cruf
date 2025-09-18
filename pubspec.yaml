@@ -39,13 +39,16 @@ dependencies:
   #Descargas
   excel: ^2.0.0
   path_provider: ^2.0.14
-
+  #firmar
+  signature: ^5.4.0
+  
   pdf: ^3.11.0
   printing: ^5.10.0
   # Firebase Core
   firebase_core: ^3.13.1       # versión publicada recientemente :contentReference[oaicite:0]{index=0}
   firebase_auth: ^5.5.4        # última versión estable :contentReference[oaicite:1]{index=1}
   cloud_firestore: ^5.6.8      # versión Dart 3 compatible :contentReference[oaicite:2]{index=2}
+  firebase_storage: ^12.4.0
 
 dev_dependencies:
   flutter_test:
