@@ -11,7 +11,6 @@ class FichajesScreen extends StatefulWidget {
 class _AdminScreenState extends State<FichajesScreen> {
   final FirebaseFirestore db = FirebaseFirestore.instance;
 
-  // Controladores para los buscadores
   TextEditingController usuarioSearchController = TextEditingController();
   TextEditingController registroSearchController = TextEditingController();
 
@@ -55,7 +54,6 @@ class _AdminScreenState extends State<FichajesScreen> {
       padding: const EdgeInsets.all(8.0),
       child: Column(
         children: [
-          // Buscador por nombre o rol
           TextField(
             controller: usuarioSearchController,
             decoration: const InputDecoration(
@@ -65,98 +63,107 @@ class _AdminScreenState extends State<FichajesScreen> {
             onChanged: (_) => setState(() {}),
           ),
           const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.all(8),
-            color: Colors.purple.withOpacity(0.2),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  "USUARIOS",
-                  style: TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.bold, color: Colors.purple),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.add, color: Colors.purple),
-                  onPressed: _agregarUsuario,
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: db.collection("fichadores").snapshots(),
-              builder: (context, snapshot) {
-                if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-                var docs = snapshot.data!.docs;
+          StreamBuilder<QuerySnapshot>(
+            stream: db.collection("fichadores").snapshots(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+              var docs = snapshot.data!.docs;
 
-                // Filtrar por buscador
-                final query = usuarioSearchController.text.toLowerCase();
-                if (query.isNotEmpty) {
-                  docs = docs.where((doc) {
-                    final data = doc.data() as Map<String, dynamic>;
-                    final nombre = (data['nombre'] ?? '').toString().toLowerCase();
-                    final rol = (data['rol'] ?? '').toString().toLowerCase();
-                    return nombre.contains(query) || rol.contains(query);
-                  }).toList();
-                }
+              final query = usuarioSearchController.text.toLowerCase();
+              if (query.isNotEmpty) {
+                docs = docs.where((doc) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  final nombre = (data['nombre'] ?? '').toString().toLowerCase();
+                  final rol = (data['rol'] ?? '').toString().toLowerCase();
+                  return nombre.contains(query) || rol.contains(query);
+                }).toList();
+              }
 
-                if (docs.isEmpty) return const Center(child: Text("Sin usuarios"));
-
-                return SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(minWidth: MediaQuery.of(context).size.width),
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.vertical,
-                      child: DataTable(
-                        columns: const [
-                          DataColumn(label: Text("Nombre")),
-                          DataColumn(label: Text("Usuario")),
-                          DataColumn(label: Text("Rol")),
-                          DataColumn(label: Text("Activo")),
-                          DataColumn(label: Text("Acciones")),
+              return Expanded(
+                child: Column(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      color: Colors.purple.withOpacity(0.2),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            "USUARIOS (${docs.length})",
+                            style: const TextStyle(
+                                fontSize: 18, fontWeight: FontWeight.bold, color: Colors.purple),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.add, color: Colors.purple),
+                            onPressed: _agregarUsuario,
+                          ),
                         ],
-                        rows: docs.map((doc) {
-                          final data = doc.data() as Map<String, dynamic>;
-                          return DataRow(cells: [
-                            DataCell(Text(data['nombre'] ?? '-')),
-                            DataCell(Text(data['usuario'] ?? '-')),
-                            DataCell(Text(data['rol'] ?? '-')),
-                            DataCell(Text(data['activo'] == true ? 'Sí' : 'No')),
-                            DataCell(Row(
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.edit, color: Colors.orange, size: 20),
-                                  onPressed: () => _editarUsuario(doc.id, data),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.delete, color: Colors.red, size: 20),
-                                  onPressed: () => _eliminarUsuario(doc.id),
-                                ),
-                              ],
-                            )),
-                          ]);
-                        }).toList(),
                       ),
                     ),
-                  ),
-                );
-              },
-            ),
+                    if (docs.isEmpty)
+                      const Expanded(child: Center(child: Text("Sin usuarios")))
+                    else
+                      Expanded(
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(minWidth: MediaQuery.of(context).size.width),
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.vertical,
+                              child: DataTable(
+                                columns: const [
+                                  DataColumn(label: Text("#")),
+                                  DataColumn(label: Text("Nombre")),
+                                  DataColumn(label: Text("Usuario")),
+                                  DataColumn(label: Text("Rol")),
+                                  DataColumn(label: Text("Activo")),
+                                  DataColumn(label: Text("Acciones")),
+                                ],
+                                rows: docs.asMap().entries.map((entry) {
+                                  int index = entry.key + 1; // numerar desde 1
+                                  final data = entry.value.data() as Map<String, dynamic>;
+                                  final docId = entry.value.id;
+                                  return DataRow(cells: [
+                                    DataCell(Text(index.toString())),
+                                    DataCell(Text(data['nombre'] ?? '-')),
+                                    DataCell(Text(data['usuario'] ?? '-')),
+                                    DataCell(Text(data['rol'] ?? '-')),
+                                    DataCell(Text(data['activo'] == true ? 'Sí' : 'No')),
+                                    DataCell(Row(
+                                      children: [
+                                        IconButton(
+                                          icon: const Icon(Icons.edit, color: Colors.orange, size: 20),
+                                          onPressed: () => _editarUsuario(docId, data),
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(Icons.delete, color: Colors.red, size: 20),
+                                          onPressed: () => _eliminarUsuario(docId),
+                                        ),
+                                      ],
+                                    )),
+                                  ]);
+                                }).toList(),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              );
+            },
           ),
         ],
       ),
     );
   }
 
-  // --- SECCIÓN DE TRABAJADORES (Registros) ---
+  // --- SECCIÓN DE TRABAJADORES ---
   Widget _buildTrabajadoresColumn() {
     return Padding(
       padding: const EdgeInsets.all(8.0),
       child: Column(
         children: [
-          // Buscador por nombre o tipo
           TextField(
             controller: registroSearchController,
             decoration: const InputDecoration(
@@ -166,99 +173,109 @@ class _AdminScreenState extends State<FichajesScreen> {
             onChanged: (_) => setState(() {}),
           ),
           const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.all(8),
-            color: Colors.green.withOpacity(0.2),
-            child: const Center(
-              child: Text(
-                "TRABAJADORES",
-                style: TextStyle(
-                    fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green),
-              ),
-            ),
-          ),
-          Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: db.collection("registros").snapshots(),
-              builder: (context, snapshot) {
-                if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-                var docs = snapshot.data!.docs;
+          StreamBuilder<QuerySnapshot>(
+            stream: db.collection("registros").snapshots(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+              var docs = snapshot.data!.docs;
 
-                // Filtrar por buscador
-                final query = registroSearchController.text.toLowerCase();
-                if (query.isNotEmpty) {
-                  docs = docs.where((doc) {
-                    final data = doc.data() as Map<String, dynamic>;
-                    final nombre = (data['nombre'] ?? '').toString().toLowerCase();
-                    final tipo = (data['tipo'] ?? '').toString().toLowerCase();
-                    return nombre.contains(query) || tipo.contains(query);
-                  }).toList();
-                }
+              final query = registroSearchController.text.toLowerCase();
+              if (query.isNotEmpty) {
+                docs = docs.where((doc) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  final nombre = (data['nombre'] ?? '').toString().toLowerCase();
+                  final tipo = (data['tipo'] ?? '').toString().toLowerCase();
+                  return nombre.contains(query) || tipo.contains(query);
+                }).toList();
+              }
 
-                if (docs.isEmpty) return const Center(child: Text("Sin registros"));
-
-                return SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(minWidth: MediaQuery.of(context).size.width),
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.vertical,
-                      child: DataTable(
-                        columns: const [
-                          DataColumn(label: Text("Nombre")),
-                          DataColumn(label: Text("Usuario")),
-                          DataColumn(label: Text("Tipo")),
-                          DataColumn(label: Text("Fecha")),
-                          DataColumn(label: Text("Hora")),
-                          DataColumn(label: Text("Justificación")),
-                          DataColumn(label: Text("Firma URL")),
-                          DataColumn(label: Text("Acciones")),
-                        ],
-                        rows: docs.map((doc) {
-                          final data = doc.data() as Map<String, dynamic>;
-                          return DataRow(cells: [
-                            DataCell(Text(data['nombre'] ?? '-')),
-                            DataCell(Text(data['usuario'] ?? '-')),
-                            DataCell(Text(data['tipo'] ?? '-')),
-                            DataCell(Text(data['fecha'] ?? '-')),
-                            DataCell(Text(data['hora'] ?? '-')),
-                            DataCell(Text(data['justificacion'] ?? '-')),
-                            DataCell(
-                              Container(
-                                width: 100,
-                                child: Text(
-                                  data['firmaUrl'] ?? '-',
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ),
-                            DataCell(Row(
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.edit, color: Colors.orange, size: 20),
-                                  onPressed: () => _editarRegistro(doc.id, data),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.delete, color: Colors.red, size: 20),
-                                  onPressed: () => _eliminarRegistro(doc.id),
-                                ),
-                              ],
-                            )),
-                          ]);
-                        }).toList(),
+              return Expanded(
+                child: Column(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      color: Colors.green.withOpacity(0.2),
+                      child: Center(
+                        child: Text(
+                          "TRABAJADORES (${docs.length})",
+                          style: const TextStyle(
+                              fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green),
+                        ),
                       ),
                     ),
-                  ),
-                );
-              },
-            ),
+                    if (docs.isEmpty)
+                      const Expanded(child: Center(child: Text("Sin registros")))
+                    else
+                      Expanded(
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(minWidth: MediaQuery.of(context).size.width),
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.vertical,
+                              child: DataTable(
+                                columns: const [
+                                  DataColumn(label: Text("#")),
+                                  DataColumn(label: Text("Nombre")),
+                                  DataColumn(label: Text("Usuario")),
+                                  DataColumn(label: Text("Tipo")),
+                                  DataColumn(label: Text("Fecha")),
+                                  DataColumn(label: Text("Hora")),
+                                  DataColumn(label: Text("Justificación")),
+                                  DataColumn(label: Text("Firma URL")),
+                                  DataColumn(label: Text("Acciones")),
+                                ],
+                                rows: docs.asMap().entries.map((entry) {
+                                  int index = entry.key + 1;
+                                  final data = entry.value.data() as Map<String, dynamic>;
+                                  final docId = entry.value.id;
+                                  return DataRow(cells: [
+                                    DataCell(Text(index.toString())),
+                                    DataCell(Text(data['nombre'] ?? '-')),
+                                    DataCell(Text(data['usuario'] ?? '-')),
+                                    DataCell(Text(data['tipo'] ?? '-')),
+                                    DataCell(Text(data['fecha'] ?? '-')),
+                                    DataCell(Text(data['hora'] ?? '-')),
+                                    DataCell(Text(data['justificacion'] ?? '-')),
+                                    DataCell(
+                                      Container(
+                                        width: 100,
+                                        child: Text(
+                                          data['firmaUrl'] ?? '-',
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ),
+                                    DataCell(Row(
+                                      children: [
+                                        IconButton(
+                                          icon: const Icon(Icons.edit, color: Colors.orange, size: 20),
+                                          onPressed: () => _editarRegistro(docId, data),
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(Icons.delete, color: Colors.red, size: 20),
+                                          onPressed: () => _eliminarRegistro(docId),
+                                        ),
+                                      ],
+                                    )),
+                                  ]);
+                                }).toList(),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              );
+            },
           ),
         ],
       ),
     );
   }
 
-  // --- Funciones de Usuarios ---
+  // --- Funciones de Usuarios y Trabajadores ---
   void _agregarUsuario() async {
     final usuarioController = TextEditingController();
     final nombreController = TextEditingController();
@@ -322,24 +339,22 @@ class _AdminScreenState extends State<FichajesScreen> {
           title: const Text("Editar usuario"),
           content: StatefulBuilder(
             builder: (context, setState) {
-              return SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(controller: nombreController, decoration: const InputDecoration(labelText: "Nombre")),
-                    TextField(controller: usuarioController, decoration: const InputDecoration(labelText: "Usuario")),
-                    TextField(controller: rolController, decoration: const InputDecoration(labelText: "Rol")),
-                    Row(
-                      children: [
-                        const Text("Activo:"),
-                        Switch(
-                          value: activo,
-                          onChanged: (value) => setState(() => activo = value),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(controller: nombreController, decoration: const InputDecoration(labelText: "Nombre")),
+                  TextField(controller: usuarioController, decoration: const InputDecoration(labelText: "Usuario")),
+                  TextField(controller: rolController, decoration: const InputDecoration(labelText: "Rol")),
+                  Row(
+                    children: [
+                      const Text("Activo:"),
+                      Switch(
+                        value: activo,
+                        onChanged: (value) => setState(() => activo = value),
+                      ),
+                    ],
+                  ),
+                ],
               );
             },
           ),
@@ -379,7 +394,6 @@ class _AdminScreenState extends State<FichajesScreen> {
     }
   }
 
-  // --- Funciones de Registros ---
   void _editarRegistro(String docId, Map<String, dynamic> data) async {
     final fechaController = TextEditingController(text: data['fecha']);
     final horaController = TextEditingController(text: data['hora']);

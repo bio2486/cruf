@@ -11,12 +11,29 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _usernameController = TextEditingController();
+  final FocusNode _usernameFocus = FocusNode(); // 🔹 Para controlar el foco
   final FirebaseFirestore db = FirebaseFirestore.instance;
 
   bool _loading = false;
   String? _error;
 
+  @override
+  void initState() {
+    super.initState();
+    // 🔹 Pedir foco automáticamente al abrir la pantalla
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _usernameFocus.requestFocus();
+    });
+  }
+
   Future<void> _login() async {
+    if (_usernameController.text.trim().isEmpty) {
+      setState(() {
+        _error = "Introduce un usuario";
+      });
+      return;
+    }
+
     setState(() {
       _loading = true;
       _error = null;
@@ -32,7 +49,9 @@ class _LoginScreenState extends State<LoginScreen> {
       if (query.docs.isNotEmpty) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const HomeScreen(usuario: '',)),
+          MaterialPageRoute(
+            builder: (_) => const HomeScreen(usuario: ''), // 🔹 Ajusta según tu lógica
+          ),
         );
       } else {
         setState(() {
@@ -95,10 +114,14 @@ class _LoginScreenState extends State<LoginScreen> {
                     // 🔹 Campo usuario
                     SizedBox(
                       width: 280,
-                      child: TextField(
+                      child: TextFormField(
                         controller: _usernameController,
+                        focusNode: _usernameFocus, // 🔹 Autofoco
+                        autofocus: true, // 🔹 Abre teclado en móvil
                         textInputAction: TextInputAction.done,
-                        onSubmitted: (_) => _login(),
+                        onFieldSubmitted: (_) {
+                          if (!_loading) _login();
+                        },
                         decoration: InputDecoration(
                           labelText: "Usuario",
                           border: OutlineInputBorder(

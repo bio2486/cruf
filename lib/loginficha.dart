@@ -12,11 +12,28 @@ class LoginFichaScreen extends StatefulWidget {
 
 class _LoginFichaScreenState extends State<LoginFichaScreen> {
   final TextEditingController _userController = TextEditingController();
+  final FocusNode _userFocus = FocusNode(); // 🔹 Para manejar el foco
   final FirebaseFirestore db = FirebaseFirestore.instance;
   bool _loading = false;
   String? _error;
 
+  @override
+  void initState() {
+    super.initState();
+    // 🔹 Pedir foco automáticamente al entrar
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _userFocus.requestFocus();
+    });
+  }
+
   Future<void> _login() async {
+    if (_userController.text.trim().isEmpty) {
+      setState(() {
+        _error = "Introduce un usuario";
+      });
+      return;
+    }
+
     setState(() {
       _loading = true;
       _error = null;
@@ -37,9 +54,9 @@ class _LoginFichaScreenState extends State<LoginFichaScreen> {
         final String usuario = data["usuario"];
 
         if (rol == "admin") {
-           Navigator.pushReplacement(
+          Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (_) => FichajesScreen()),
+            MaterialPageRoute(builder: (_) => const FichajesScreen()),
           );
         } else {
           Navigator.pushReplacement(
@@ -83,16 +100,16 @@ class _LoginFichaScreenState extends State<LoginFichaScreen> {
               ),
               margin: const EdgeInsets.symmetric(horizontal: 28, vertical: 20),
               child: Padding(
-                padding: const EdgeInsets.all(32.0), // 🔹 Un poco más amplio
+                padding: const EdgeInsets.all(32.0),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.school, size: 100, color: Colors.blueAccent), // 🔹 Un poco más grande
+                    const Icon(Icons.school, size: 100, color: Colors.blueAccent),
                     const SizedBox(height: 18),
                     const Text(
                       "Acceso al sistema educativo",
                       style: TextStyle(
-                        fontSize: 20, // 🔹 Tamaño intermedio
+                        fontSize: 20,
                         fontWeight: FontWeight.bold,
                         color: Colors.black87,
                       ),
@@ -102,9 +119,11 @@ class _LoginFichaScreenState extends State<LoginFichaScreen> {
 
                     // Campo usuario
                     SizedBox(
-                      width: 280, // 🔹 Más ancho que antes (220 → 240)
-                      child: TextField(
+                      width: 280,
+                      child: TextFormField(
                         controller: _userController,
+                        focusNode: _userFocus, // 🔹 Asignamos el foco
+                        autofocus: true, // 🔹 Esto abre teclado en móvil
                         decoration: InputDecoration(
                           labelText: "Usuario",
                           border: OutlineInputBorder(
@@ -112,6 +131,10 @@ class _LoginFichaScreenState extends State<LoginFichaScreen> {
                           ),
                           prefixIcon: const Icon(Icons.person),
                         ),
+                        textInputAction: TextInputAction.done,
+                        onFieldSubmitted: (_) {
+                          if (!_loading) _login();
+                        },
                       ),
                     ),
                     const SizedBox(height: 20),
@@ -130,7 +153,7 @@ class _LoginFichaScreenState extends State<LoginFichaScreen> {
                     // Botón
                     SizedBox(
                       width: 280,
-                      height: 50, // 🔹 Un poco más alto que antes (45 → 50)
+                      height: 50,
                       child: ElevatedButton(
                         onPressed: _loading ? null : _login,
                         style: ElevatedButton.styleFrom(
@@ -143,7 +166,7 @@ class _LoginFichaScreenState extends State<LoginFichaScreen> {
                             ? const CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
                             : const Text(
                                 "Entrar",
-                                style: TextStyle(fontSize: 17), // 🔹 Un poco más grande
+                                style: TextStyle(fontSize: 17),
                               ),
                       ),
                     ),
