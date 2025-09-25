@@ -59,7 +59,7 @@ class HomeScreen extends StatelessWidget {
           runSpacing: 16,
           alignment: WrapAlignment.center,
           children: [
-            _buildCardButton(
+           /* _buildCardButton(
               icon: Icons.person,
               title: "Clientes",
               onTap: () {
@@ -79,17 +79,7 @@ class HomeScreen extends StatelessWidget {
                 );
               },
             ),
-            _buildCardButton(
-              icon: Icons.dashboard,
-              title: "Clientes Dashboard",
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const UsuariosDashboard()),
-                );
-              },
-            ),
-            _buildCardButton(
+             _buildCardButton(
               icon: Icons.bar_chart,
               title: "Trabajadores Dashboard",
               onTap: () {
@@ -100,6 +90,18 @@ class HomeScreen extends StatelessWidget {
                 );
               },
             ),
+            */
+            _buildCardButton(
+              icon: Icons.dashboard,
+              title: "Clientes Dashboard",
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const UsuariosDashboard()),
+                );
+              },
+            ),
+           
             _buildCardButton(
               icon: Icons.note,
               title: "Recordatorios",
@@ -110,7 +112,7 @@ class HomeScreen extends StatelessWidget {
                 );
               },
             ),
-            _buildCardButton(
+           /* _buildCardButton(
               icon: Icons.assignment_turned_in,
               title: "Fichajes Admin",
               onTap: () {
@@ -129,7 +131,7 @@ class HomeScreen extends StatelessWidget {
                   MaterialPageRoute(builder: (_) => const LoginFichaScreen()),
                 );
               },
-            ),
+            ),*/
             _buildCardButton(
               icon: Icons.logout,
               title: "Salir",

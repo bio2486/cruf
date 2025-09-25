@@ -20,8 +20,6 @@ class UsuariosDashboard extends StatefulWidget {
 
 class _UsuariosDashboardState extends State<UsuariosDashboard> {
   final FirebaseFirestore db = FirebaseFirestore.instance;
-  final TextEditingController _searchController = TextEditingController();
-
   String _searchQuery = "";
 
   @override
@@ -77,24 +75,19 @@ class _UsuariosDashboardState extends State<UsuariosDashboard> {
         Padding(
           padding: const EdgeInsets.all(12.0),
           child: TextField(
-  controller: _searchController,
-  decoration: InputDecoration(
-    labelText: "Buscar en la tabla",
-    prefixIcon: const Icon(Icons.search),
-    suffixIcon: _searchQuery.isNotEmpty
-        ? IconButton(
-            icon: const Icon(Icons.clear),
-            onPressed: () => setState(() {
-              _searchQuery = "";
-              _searchController.clear();
-            }),
-          )
-        : null,
-    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-  ),
-  onChanged: (value) => setState(() => _searchQuery = value.toLowerCase().trim()),
-),
-
+            decoration: InputDecoration(
+              labelText: "Buscar en la tabla",
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: _searchQuery.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear),
+                      onPressed: () => setState(() => _searchQuery = ""),
+                    )
+                  : null,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onChanged: (value) => setState(() => _searchQuery = value.toLowerCase().trim()),
+          ),
         ),
         Expanded(
           child: StreamBuilder<QuerySnapshot>(
